@@ -405,6 +405,25 @@ pre {
   align-items: flex-end;
 }
 
+.admin-message,
+.preview-banner {
+  border-bottom: 1px solid var(--line);
+  background: #fff7ed;
+  color: #7c2d12;
+  font-weight: 800;
+}
+
+.admin-message {
+  padding: 12px clamp(20px, 5vw, 72px);
+}
+
+.preview-banner {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  padding: 10px clamp(20px, 5vw, 72px);
+}
+
 .admin-shell {
   display: grid;
   grid-template-columns: 300px minmax(0, 1fr);

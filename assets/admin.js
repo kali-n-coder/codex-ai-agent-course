@@ -9,6 +9,7 @@ const statusLabels = {
 
 let course = null;
 let selectedLessonId = "";
+let message = "";
 
 async function loadInitialData() {
   const stored = localStorage.getItem(DRAFT_KEY);
@@ -21,6 +22,10 @@ async function loadInitialData() {
 function saveDraft() {
   course.site.updatedAt = new Date().toISOString().slice(0, 10);
   localStorage.setItem(DRAFT_KEY, JSON.stringify(course, null, 2));
+}
+
+function setMessage(text) {
+  message = text;
 }
 
 function escapeHtml(value = "") {
@@ -138,7 +143,7 @@ function renderLessonEditor(lesson) {
       ${field("演習", "lessonExercise", lesson.exercise, { type: "textarea", rows: 4 })}
 
       <div class="admin-actions">
-        <button id="applyLesson" class="button">変更を反映</button>
+        <button id="applyLesson" class="button">レッスンを下書き保存</button>
         <button id="duplicateLesson" class="button button--ghost">複製</button>
         <button id="deleteLesson" class="button button--danger">削除</button>
       </div>
@@ -158,10 +163,12 @@ function render() {
       </div>
       <div class="admin-actions">
         <button id="saveDraft" class="button">下書き保存</button>
-        <button id="exportJson" class="button button--ghost">データを書き出す</button>
-        <a class="button button--ghost" href="../">サイトを見る</a>
+        <button id="exportJson" class="button button--ghost">公開用JSONを書き出す</button>
+        <a class="button button--ghost" href="../?preview=draft" target="_blank" rel="noreferrer">下書きをプレビュー</a>
       </div>
     </header>
+
+    ${message ? `<div class="admin-message" role="status">${escapeHtml(message)}</div>` : ""}
 
     <main class="admin-shell">
       <aside class="admin-sidebar">
@@ -172,6 +179,11 @@ function render() {
       </aside>
 
       <section class="admin-editor">
+        <div class="editor-section admin-help">
+          <h2>編集の流れ</h2>
+          <p>この画面で保存した内容は、このブラウザ内の下書きです。サイトへ載せる内容が決まったら、公開用JSONを書き出して、リポジトリのデータを更新します。</p>
+        </div>
+
         <div class="editor-section">
           <h2>サイト設定</h2>
           <div class="editor-grid">
@@ -229,6 +241,7 @@ function addLesson() {
   course.lessons.push(lesson);
   selectedLessonId = lesson.id;
   saveDraft();
+  setMessage("レッスンを追加しました。");
   render();
 }
 
@@ -243,6 +256,8 @@ function downloadJson() {
   link.download = "course.json";
   link.click();
   URL.revokeObjectURL(url);
+  setMessage("course.jsonを書き出しました。公開するには scripts/Publish-CourseData.ps1 で data/course.json に反映して push します。");
+  render();
 }
 
 function bindEvents() {
@@ -263,6 +278,7 @@ function bindEvents() {
     updateSiteFromForm();
     updateLessonFromForm();
     saveDraft();
+    setMessage("編集中のレッスンを下書きに保存しました。");
     render();
   });
 
@@ -270,6 +286,8 @@ function bindEvents() {
     updateSiteFromForm();
     updateLessonFromForm();
     saveDraft();
+    setMessage("下書きを保存しました。");
+    render();
   });
 
   document.querySelector("#exportJson").addEventListener("click", downloadJson);
@@ -288,6 +306,7 @@ function bindEvents() {
     course.lessons.push(copy);
     selectedLessonId = copy.id;
     saveDraft();
+    setMessage("レッスンを複製しました。");
     render();
   });
 
@@ -295,6 +314,7 @@ function bindEvents() {
     course.lessons = (course.lessons ?? []).filter((lesson) => lesson.id !== selectedLessonId);
     selectedLessonId = course.lessons[0]?.id ?? "";
     saveDraft();
+    setMessage("レッスンを削除しました。");
     render();
   });
 

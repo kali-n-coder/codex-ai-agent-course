@@ -1,4 +1,12 @@
+const DRAFT_KEY = "codex-course-admin-draft-v3";
+
 async function loadCourse() {
+  const params = new URLSearchParams(location.search);
+  if (params.get("preview") === "draft") {
+    const stored = localStorage.getItem(DRAFT_KEY);
+    if (stored) return JSON.parse(stored);
+  }
+
   const response = await fetch("data/course.json", { cache: "no-store" });
   if (!response.ok) throw new Error("講座データを読み込めませんでした");
   return response.json();
@@ -189,9 +197,10 @@ async function render() {
   const root = document.querySelector("#app");
   try {
     const course = await loadCourse();
+    const isPreview = new URLSearchParams(location.search).get("preview") === "draft";
     const lessonId = decodeURIComponent(location.hash.replace("#", ""));
-    const lesson = (course.lessons ?? []).find((item) => item.id === lessonId && item.status === "published");
-    root.innerHTML = lesson ? renderLesson(course, lesson) : renderHome(course);
+    const lesson = (course.lessons ?? []).find((item) => item.id === lessonId && (isPreview || item.status === "published"));
+    root.innerHTML = `${isPreview ? `<div class="preview-banner">下書きプレビュー</div>` : ""}${lesson ? renderLesson(course, lesson) : renderHome(course)}`;
     document.title = lesson ? `${lesson.title} | ${course.site.title}` : course.site.title;
   } catch (error) {
     root.innerHTML = `<main class="error-page"><h1>読み込みエラー</h1><p>${escapeHtml(error.message)}</p></main>`;

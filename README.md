@@ -25,6 +25,13 @@ http://127.0.0.1:4321/admin/
 ## コンテンツ更新
 
 1. `/admin/` でサイト情報やレッスンを編集する
-2. `データを書き出す` で `course.json` を保存する
-3. `data/course.json` を置き換える
-4. 変更を反映する
+2. `レッスンを下書き保存` または `下書き保存` でブラウザ内に保存する
+3. `下書きをプレビュー` で表示を確認する
+4. `公開用JSONを書き出す` で `course.json` を保存する
+5. 次のコマンドでサイトデータへ反映してGitHubへ送る
+
+```powershell
+.\scripts\Publish-CourseData.ps1 -CourseJson "$env:USERPROFILE\Downloads\course.json"
+```
+
+管理画面で追加しただけでは、公開サイトの `data/course.json` は変わりません。
