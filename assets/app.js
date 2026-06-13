@@ -1,9 +1,3 @@
-const statusLabels = {
-  draft: "下書き",
-  published: "公開中",
-  archived: "非公開",
-};
-
 async function loadCourse() {
   const response = await fetch("data/course.json", { cache: "no-store" });
   if (!response.ok) throw new Error("講座データを読み込めませんでした");
@@ -33,16 +27,9 @@ function youtubeId(url = "") {
   return text.length <= 24 ? text : "";
 }
 
-function renderVideo(lesson) {
+function renderMedia(lesson) {
   const id = youtubeId(lesson.videoUrl);
-  if (!id) {
-    return `
-      <div class="video-placeholder">
-        <span>Coming soon</span>
-        <strong>${escapeHtml(lesson.title)}</strong>
-      </div>
-    `;
-  }
+  if (!id) return "";
 
   return `
     <div class="video-frame">
@@ -87,7 +74,7 @@ function renderLesson(course, lesson) {
 
     <main class="lesson-layout lesson-layout--single">
       <section class="lesson-main">
-        ${renderVideo(lesson)}
+        ${renderMedia(lesson)}
 
         ${
           lesson.objectives?.length
@@ -117,7 +104,7 @@ function renderLesson(course, lesson) {
   `;
 }
 
-function renderEmptyLessons(course) {
+function renderNoLessons(course) {
   const contact = course.site.contactUrl
     ? `<a class="button button--ghost" href="${escapeHtml(course.site.contactUrl)}">問い合わせる</a>`
     : "";
@@ -127,9 +114,9 @@ function renderEmptyLessons(course) {
 
   return `
     <section class="band empty-state" id="lessons">
-      <span class="eyebrow">Preparing</span>
-      <h2>レッスンを準備中です</h2>
-      <p>公開されたレッスンは、ここに順番に表示されます。動画と教材の準備ができ次第、受講できるようになります。</p>
+      <span class="eyebrow">Lessons</span>
+      <h2>レッスン一覧</h2>
+      <p>現在受講できるレッスンはありません。新しいレッスンが追加されるまでお待ちください。</p>
       <div class="hero__actions">${apply}${contact}</div>
     </section>
   `;
@@ -140,7 +127,7 @@ function renderHome(course) {
     .filter((lesson) => lesson.status === "published")
     .sort((a, b) => Number(a.number) - Number(b.number));
 
-  const apply = course.site.applyUrl
+  const primaryAction = course.site.applyUrl
     ? `<a class="button" href="${escapeHtml(course.site.applyUrl)}">受講案内を受け取る</a>`
     : `<a class="button" href="#lessons">レッスンを見る</a>`;
 
@@ -157,12 +144,12 @@ function renderHome(course) {
         <span class="eyebrow">Codex Course</span>
         <h1>${escapeHtml(course.site.title)}</h1>
         <p>${escapeHtml(course.site.description)}</p>
-        <div class="hero__actions">${apply}</div>
+        <div class="hero__actions">${primaryAction}</div>
       </div>
       <div class="hero__stats" aria-label="講座情報">
-        <div><strong>${lessons.length}</strong><span>公開レッスン</span></div>
-        <div><strong>動画</strong><span>画面録画中心</span></div>
-        <div><strong>実践</strong><span>Codexアプリで学習</span></div>
+        <div><strong>${lessons.length}</strong><span>レッスン</span></div>
+        <div><strong>実践</strong><span>手を動かして学ぶ</span></div>
+        <div><strong>入門</strong><span>はじめてのCodex</span></div>
       </div>
     </header>
 
@@ -180,8 +167,8 @@ function renderHome(course) {
 
       ${
         lessons.length
-          ? `<section class="band" id="lessons"><div class="section-heading"><span class="eyebrow">Lessons</span><h2>公開中のレッスン</h2></div><div class="lesson-grid">${lessons.map(lessonCard).join("")}</div></section>`
-          : renderEmptyLessons(course)
+          ? `<section class="band" id="lessons"><div class="section-heading"><span class="eyebrow">Lessons</span><h2>レッスン一覧</h2></div><div class="lesson-grid">${lessons.map(lessonCard).join("")}</div></section>`
+          : renderNoLessons(course)
       }
     </main>
 

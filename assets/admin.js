@@ -1,10 +1,10 @@
 const DATA_URL = "../data/course.json";
-const DRAFT_KEY = "codex-course-admin-draft-v2";
+const DRAFT_KEY = "codex-course-admin-draft-v3";
 
 const statusLabels = {
   draft: "下書き",
-  published: "公開中",
-  archived: "非公開",
+  published: "表示する",
+  archived: "表示しない",
 };
 
 let course = null;
@@ -84,7 +84,7 @@ function selectedLesson() {
 function renderLessonList() {
   const lessons = [...(course.lessons ?? [])].sort((a, b) => Number(a.number) - Number(b.number));
   if (!lessons.length) {
-    return `<p class="note">まだレッスンは登録されていません。「レッスン追加」から作成してください。</p>`;
+    return `<p class="note">まだレッスンはありません。</p>`;
   }
 
   return lessons
@@ -104,9 +104,9 @@ function renderLessonEditor(lesson) {
   if (!lesson) {
     return `
       <div class="editor-section">
-        <h2>レッスン未登録</h2>
-        <p class="note">公開するレッスンは管理画面から登録します。タイトル、動画URL、本文を入れて、公開状態を「公開中」にしたものだけが表に表示されます。</p>
-        <button id="addFirstLesson" class="button">最初のレッスンを追加</button>
+        <h2>レッスン</h2>
+        <p class="note">レッスンを追加して、タイトル、本文、教材URLを入力してください。</p>
+        <button id="addFirstLesson" class="button">レッスンを追加</button>
       </div>
     `;
   }
@@ -122,7 +122,7 @@ function renderLessonEditor(lesson) {
       </div>
 
       <label class="field">
-        <span>公開状態</span>
+        <span>表示状態</span>
         <select id="lessonStatus">
           ${Object.entries(statusLabels)
             .map(([value, label]) => `<option value="${value}" ${lesson.status === value ? "selected" : ""}>${label}</option>`)
@@ -130,7 +130,7 @@ function renderLessonEditor(lesson) {
         </select>
       </label>
 
-      ${field("YouTube URLまたは動画ID", "lessonVideoUrl", lesson.videoUrl)}
+      ${field("教材URLまたは埋め込みID", "lessonVideoUrl", lesson.videoUrl)}
       ${field("概要", "lessonSummary", lesson.summary, { type: "textarea", rows: 3 })}
       ${field("このレッスンで学ぶこと（1行1項目）", "lessonObjectives", joinLines(lesson.objectives), { type: "textarea", rows: 5 })}
       ${field("進め方（1行1項目）", "lessonSteps", joinLines(lesson.steps), { type: "textarea", rows: 5 })}
@@ -154,12 +154,12 @@ function render() {
       <div>
         <span class="eyebrow">Content Admin</span>
         <h1>講座管理</h1>
-        <p>レッスン、動画URL、公開状態を登録します。公開中のレッスンだけが受講者向けサイトに表示されます。</p>
+        <p>サイト情報とレッスン内容を編集します。</p>
       </div>
       <div class="admin-actions">
         <button id="saveDraft" class="button">下書き保存</button>
-        <button id="exportJson" class="button button--ghost">公開データを書き出す</button>
-        <a class="button button--ghost" href="../">公開ページを見る</a>
+        <button id="exportJson" class="button button--ghost">データを書き出す</button>
+        <a class="button button--ghost" href="../">サイトを見る</a>
       </div>
     </header>
 
@@ -185,17 +185,6 @@ function render() {
         </div>
 
         ${renderLessonEditor(lesson)}
-
-        <div class="editor-section">
-          <h2>公開方法</h2>
-          <ol class="publish-list">
-            <li>管理画面でレッスンを登録する</li>
-            <li>公開したいレッスンだけ、公開状態を「公開中」にする</li>
-            <li>「公開データを書き出す」で course.json を保存する</li>
-            <li>data/course.json を置き換えてデプロイする</li>
-          </ol>
-          <p class="note">この管理画面は無料運用向けの静的エディタです。ログイン付きの本格管理画面にする場合は、次段階でCloudflare Pages FunctionsやSupabaseを追加します。</p>
-        </div>
       </section>
     </main>
   `;

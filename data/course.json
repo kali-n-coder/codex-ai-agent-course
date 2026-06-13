@@ -3,7 +3,7 @@
     "title": "Codex入門講座",
     "tagline": "AIエージェントを、仕事の進め方として学ぶ。",
     "description": "ChatGPTなどの生成AIチャットに慣れた人が、Codexアプリでプロジェクトを読み、変更し、確認する流れを学ぶための講座です。",
-    "status": "preparing",
+    "status": "active",
     "applyUrl": "",
     "contactUrl": "",
     "updatedAt": "2026-06-13"
@@ -11,8 +11,7 @@
   "tools": [
     "Codexアプリ",
     "Windows",
-    "OBS Studio",
-    "YouTube限定公開"
+    "Google Chrome"
   ],
   "lessons": []
 }
