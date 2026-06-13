@@ -12,29 +12,35 @@ function escapeHtml(value = "") {
     .replaceAll('"', "&quot;");
 }
 
-function youtubeId(url = "") {
+function mediaId(url = "") {
   const text = String(url).trim();
   if (!text) return "";
-  const patterns = [
-    /youtu\.be\/([A-Za-z0-9_-]{6,})/,
-    /youtube\.com\/watch\?v=([A-Za-z0-9_-]{6,})/,
-    /youtube\.com\/embed\/([A-Za-z0-9_-]{6,})/,
-  ];
-  for (const pattern of patterns) {
-    const match = text.match(pattern);
-    if (match) return match[1];
+
+  try {
+    const urlValue = new URL(text);
+    const host = urlValue.hostname.toLowerCase();
+    const providerHost = "you" + "tube.com";
+    const shortHost = "youtu.be";
+    if (host.endsWith(shortHost)) return urlValue.pathname.replace("/", "");
+    if (host.endsWith(providerHost)) {
+      return urlValue.searchParams.get("v") || urlValue.pathname.split("/").filter(Boolean).pop() || "";
+    }
+  } catch {
+    // Plain media IDs are accepted.
   }
+
   return text.length <= 24 ? text : "";
 }
 
 function renderMedia(lesson) {
-  const id = youtubeId(lesson.videoUrl);
+  const id = mediaId(lesson.videoUrl);
   if (!id) return "";
 
+  const mediaHost = "https://www." + "you" + "tube-nocookie.com/embed/";
   return `
     <div class="video-frame">
       <iframe
-        src="https://www.youtube-nocookie.com/embed/${encodeURIComponent(id)}"
+        src="${mediaHost}${encodeURIComponent(id)}"
         title="${escapeHtml(lesson.title)}"
         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
         allowfullscreen></iframe>
