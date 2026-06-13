@@ -1,10 +1,10 @@
 const DATA_URL = "../data/course.json";
-const DRAFT_KEY = "codex-course-admin-draft";
+const DRAFT_KEY = "codex-course-admin-draft-v2";
 
 const statusLabels = {
   draft: "下書き",
-  "ready-for-video": "動画待ち",
   published: "公開中",
+  archived: "非公開",
 };
 
 let course = null;
@@ -44,7 +44,7 @@ function field(label, id, value, options = {}) {
   return `
     <label class="field">
       <span>${label}</span>
-      <input id="${id}" type="${type}" value="${escapeHtml(value)}" />
+      <input id="${id}" type="${type}" value="${escapeHtml(value ?? "")}" />
     </label>
   `;
 }
@@ -60,45 +60,113 @@ function joinLines(value) {
   return Array.isArray(value) ? value.join("\n") : "";
 }
 
+function emptyLesson() {
+  const nextNumber = Math.max(0, ...(course.lessons ?? []).map((lesson) => Number(lesson.number) || 0)) + 1;
+  return {
+    id: `lesson-${String(nextNumber).padStart(2, "0")}`,
+    number: nextNumber,
+    title: "",
+    status: "draft",
+    duration: "",
+    videoUrl: "",
+    summary: "",
+    objectives: [],
+    steps: [],
+    prompt: "",
+    exercise: "",
+  };
+}
+
 function selectedLesson() {
-  return course.lessons.find((lesson) => lesson.id === selectedLessonId) ?? course.lessons[0];
+  return (course.lessons ?? []).find((lesson) => lesson.id === selectedLessonId) ?? null;
+}
+
+function renderLessonList() {
+  const lessons = [...(course.lessons ?? [])].sort((a, b) => Number(a.number) - Number(b.number));
+  if (!lessons.length) {
+    return `<p class="note">まだレッスンは登録されていません。「レッスン追加」から作成してください。</p>`;
+  }
+
+  return lessons
+    .map(
+      (item) => `
+        <button class="${item.id === selectedLessonId ? "is-active" : ""}" data-select="${escapeHtml(item.id)}">
+          <span>Lesson ${escapeHtml(item.number)}</span>
+          <strong>${escapeHtml(item.title || "無題のレッスン")}</strong>
+          <small>${statusLabels[item.status] ?? item.status}</small>
+        </button>
+      `,
+    )
+    .join("");
+}
+
+function renderLessonEditor(lesson) {
+  if (!lesson) {
+    return `
+      <div class="editor-section">
+        <h2>レッスン未登録</h2>
+        <p class="note">公開するレッスンは管理画面から登録します。タイトル、動画URL、本文を入れて、公開状態を「公開中」にしたものだけが表に表示されます。</p>
+        <button id="addFirstLesson" class="button">最初のレッスンを追加</button>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="editor-section">
+      <h2>レッスン編集</h2>
+      <div class="editor-grid">
+        ${field("ID", "lessonId", lesson.id)}
+        ${field("番号", "lessonNumber", lesson.number, { type: "number" })}
+        ${field("タイトル", "lessonTitle", lesson.title)}
+        ${field("目安時間", "lessonDuration", lesson.duration)}
+      </div>
+
+      <label class="field">
+        <span>公開状態</span>
+        <select id="lessonStatus">
+          ${Object.entries(statusLabels)
+            .map(([value, label]) => `<option value="${value}" ${lesson.status === value ? "selected" : ""}>${label}</option>`)
+            .join("")}
+        </select>
+      </label>
+
+      ${field("YouTube URLまたは動画ID", "lessonVideoUrl", lesson.videoUrl)}
+      ${field("概要", "lessonSummary", lesson.summary, { type: "textarea", rows: 3 })}
+      ${field("このレッスンで学ぶこと（1行1項目）", "lessonObjectives", joinLines(lesson.objectives), { type: "textarea", rows: 5 })}
+      ${field("進め方（1行1項目）", "lessonSteps", joinLines(lesson.steps), { type: "textarea", rows: 5 })}
+      ${field("Codexへの依頼例", "lessonPrompt", lesson.prompt, { type: "textarea", rows: 5 })}
+      ${field("演習", "lessonExercise", lesson.exercise, { type: "textarea", rows: 4 })}
+
+      <div class="admin-actions">
+        <button id="applyLesson" class="button">変更を反映</button>
+        <button id="duplicateLesson" class="button button--ghost">複製</button>
+        <button id="deleteLesson" class="button button--danger">削除</button>
+      </div>
+    </div>
+  `;
 }
 
 function render() {
   const lesson = selectedLesson();
-  selectedLessonId = lesson.id;
 
   document.querySelector("#admin").innerHTML = `
     <header class="admin-shell__header">
       <div>
-        <span class="eyebrow">Admin</span>
+        <span class="eyebrow">Content Admin</span>
         <h1>講座管理</h1>
-        <p>動画URL、公開状態、教材文を編集して、公開用JSONを書き出します。</p>
+        <p>レッスン、動画URL、公開状態を登録します。公開中のレッスンだけが受講者向けサイトに表示されます。</p>
       </div>
       <div class="admin-actions">
         <button id="saveDraft" class="button">下書き保存</button>
-        <button id="exportJson" class="button button--ghost">公開JSONを書き出す</button>
-        <a class="button button--ghost" href="../">サイト確認</a>
+        <button id="exportJson" class="button button--ghost">公開データを書き出す</button>
+        <a class="button button--ghost" href="../">公開ページを見る</a>
       </div>
     </header>
 
     <main class="admin-shell">
       <aside class="admin-sidebar">
         <h2>レッスン</h2>
-        <div class="admin-lesson-list">
-          ${course.lessons
-            .sort((a, b) => a.number - b.number)
-            .map(
-              (item) => `
-                <button class="${item.id === lesson.id ? "is-active" : ""}" data-select="${escapeHtml(item.id)}">
-                  <span>Lesson ${item.number}</span>
-                  <strong>${escapeHtml(item.title)}</strong>
-                  <small>${statusLabels[item.status] ?? item.status}</small>
-                </button>
-              `,
-            )
-            .join("")}
-        </div>
+        <div class="admin-lesson-list">${renderLessonList()}</div>
         <button id="addLesson" class="button button--full button--ghost">レッスン追加</button>
         <button id="resetDraft" class="button button--full button--danger">下書きを破棄</button>
       </aside>
@@ -109,54 +177,24 @@ function render() {
           <div class="editor-grid">
             ${field("サイト名", "siteTitle", course.site.title)}
             ${field("タグライン", "siteTagline", course.site.tagline)}
-            ${field("申込フォームURL", "siteApplyUrl", course.site.applyUrl)}
-            ${field("提出フォームURL", "siteSubmitUrl", course.site.submitUrl)}
+            ${field("受講案内URL", "siteApplyUrl", course.site.applyUrl)}
+            ${field("問い合わせURL", "siteContactUrl", course.site.contactUrl)}
           </div>
           ${field("説明", "siteDescription", course.site.description, { type: "textarea", rows: 3 })}
+          ${field("使用ツール（1行1項目）", "siteTools", joinLines(course.tools), { type: "textarea", rows: 4 })}
         </div>
 
-        <div class="editor-section">
-          <h2>レッスン編集</h2>
-          <div class="editor-grid">
-            ${field("ID", "lessonId", lesson.id)}
-            ${field("番号", "lessonNumber", lesson.number, { type: "number" })}
-            ${field("タイトル", "lessonTitle", lesson.title)}
-            ${field("目安時間", "lessonDuration", lesson.duration)}
-          </div>
-
-          <label class="field">
-            <span>公開状態</span>
-            <select id="lessonStatus">
-              ${Object.entries(statusLabels)
-                .map(([value, label]) => `<option value="${value}" ${lesson.status === value ? "selected" : ""}>${label}</option>`)
-                .join("")}
-            </select>
-          </label>
-
-          ${field("YouTube URLまたは動画ID", "lessonVideoUrl", lesson.videoUrl)}
-          ${field("概要", "lessonSummary", lesson.summary, { type: "textarea", rows: 3 })}
-          ${field("到達目標（1行1項目）", "lessonObjectives", joinLines(lesson.objectives), { type: "textarea", rows: 5 })}
-          ${field("進め方（1行1項目）", "lessonSteps", joinLines(lesson.steps), { type: "textarea", rows: 5 })}
-          ${field("Codexへの依頼文", "lessonPrompt", lesson.prompt, { type: "textarea", rows: 5 })}
-          ${field("演習", "lessonExercise", lesson.exercise, { type: "textarea", rows: 4 })}
-          ${field("テロップ案", "lessonCaption", lesson.captionDraft, { type: "textarea", rows: 4 })}
-
-          <div class="admin-actions">
-            <button id="applyLesson" class="button">このレッスンを反映</button>
-            <button id="duplicateLesson" class="button button--ghost">複製</button>
-            <button id="deleteLesson" class="button button--danger">削除</button>
-          </div>
-        </div>
+        ${renderLessonEditor(lesson)}
 
         <div class="editor-section">
-          <h2>公開手順</h2>
+          <h2>公開方法</h2>
           <ol class="publish-list">
-            <li>編集後に「下書き保存」を押す</li>
-            <li>「公開JSONを書き出す」で course.json をダウンロード</li>
-            <li>data/course.json に置き換える</li>
-            <li>Cloudflare Pagesにデプロイする</li>
+            <li>管理画面でレッスンを登録する</li>
+            <li>公開したいレッスンだけ、公開状態を「公開中」にする</li>
+            <li>「公開データを書き出す」で course.json を保存する</li>
+            <li>data/course.json を置き換えてデプロイする</li>
           </ol>
-          <p class="note">静的サイトなので、サーバーなしで無料公開できます。管理画面から本番へ直接保存したい場合は、次段階でSupabaseかGitHub連携を追加します。</p>
+          <p class="note">この管理画面は無料運用向けの静的エディタです。ログイン付きの本格管理画面にする場合は、次段階でCloudflare Pages FunctionsやSupabaseを追加します。</p>
         </div>
       </section>
     </main>
@@ -170,12 +208,16 @@ function updateSiteFromForm() {
   course.site.tagline = document.querySelector("#siteTagline").value.trim();
   course.site.description = document.querySelector("#siteDescription").value.trim();
   course.site.applyUrl = document.querySelector("#siteApplyUrl").value.trim();
-  course.site.submitUrl = document.querySelector("#siteSubmitUrl").value.trim();
+  course.site.contactUrl = document.querySelector("#siteContactUrl").value.trim();
+  course.tools = splitLines(document.querySelector("#siteTools").value);
 }
 
 function updateLessonFromForm() {
   const lesson = selectedLesson();
-  const newId = document.querySelector("#lessonId").value.trim() || lesson.id;
+  if (!lesson) return;
+
+  const oldId = lesson.id;
+  const newId = document.querySelector("#lessonId").value.trim() || oldId;
   lesson.id = newId;
   selectedLessonId = newId;
   lesson.number = Number(document.querySelector("#lessonNumber").value) || lesson.number;
@@ -188,7 +230,17 @@ function updateLessonFromForm() {
   lesson.steps = splitLines(document.querySelector("#lessonSteps").value);
   lesson.prompt = document.querySelector("#lessonPrompt").value.trim();
   lesson.exercise = document.querySelector("#lessonExercise").value.trim();
-  lesson.captionDraft = document.querySelector("#lessonCaption").value.trim();
+}
+
+function addLesson() {
+  updateSiteFromForm();
+  updateLessonFromForm();
+  course.lessons = course.lessons ?? [];
+  const lesson = emptyLesson();
+  course.lessons.push(lesson);
+  selectedLessonId = lesson.id;
+  saveDraft();
+  render();
 }
 
 function downloadJson() {
@@ -215,7 +267,10 @@ function bindEvents() {
     });
   });
 
-  document.querySelector("#applyLesson").addEventListener("click", () => {
+  document.querySelector("#addLesson")?.addEventListener("click", addLesson);
+  document.querySelector("#addFirstLesson")?.addEventListener("click", addLesson);
+
+  document.querySelector("#applyLesson")?.addEventListener("click", () => {
     updateSiteFromForm();
     updateLessonFromForm();
     saveDraft();
@@ -230,39 +285,16 @@ function bindEvents() {
 
   document.querySelector("#exportJson").addEventListener("click", downloadJson);
 
-  document.querySelector("#addLesson").addEventListener("click", () => {
-    updateSiteFromForm();
-    updateLessonFromForm();
-    const nextNumber = Math.max(...course.lessons.map((lesson) => lesson.number)) + 1;
-    const id = `lesson-${String(nextNumber).padStart(2, "0")}`;
-    course.lessons.push({
-      id,
-      number: nextNumber,
-      title: "新しいレッスン",
-      status: "draft",
-      duration: "5分",
-      videoUrl: "",
-      summary: "",
-      objectives: [],
-      steps: [],
-      prompt: "",
-      exercise: "",
-      captionDraft: "",
-    });
-    selectedLessonId = id;
-    saveDraft();
-    render();
-  });
-
-  document.querySelector("#duplicateLesson").addEventListener("click", () => {
+  document.querySelector("#duplicateLesson")?.addEventListener("click", () => {
     updateSiteFromForm();
     updateLessonFromForm();
     const source = selectedLesson();
-    const nextNumber = Math.max(...course.lessons.map((lesson) => lesson.number)) + 1;
+    if (!source) return;
     const copy = structuredClone(source);
+    const nextNumber = Math.max(0, ...(course.lessons ?? []).map((lesson) => Number(lesson.number) || 0)) + 1;
     copy.id = `lesson-${String(nextNumber).padStart(2, "0")}`;
     copy.number = nextNumber;
-    copy.title = `${source.title} のコピー`;
+    copy.title = `${source.title || "無題のレッスン"} のコピー`;
     copy.status = "draft";
     course.lessons.push(copy);
     selectedLessonId = copy.id;
@@ -270,10 +302,9 @@ function bindEvents() {
     render();
   });
 
-  document.querySelector("#deleteLesson").addEventListener("click", () => {
-    if (course.lessons.length <= 1) return;
-    course.lessons = course.lessons.filter((lesson) => lesson.id !== selectedLessonId);
-    selectedLessonId = course.lessons[0].id;
+  document.querySelector("#deleteLesson")?.addEventListener("click", () => {
+    course.lessons = (course.lessons ?? []).filter((lesson) => lesson.id !== selectedLessonId);
+    selectedLessonId = course.lessons[0]?.id ?? "";
     saveDraft();
     render();
   });
@@ -288,7 +319,8 @@ async function init() {
   const root = document.querySelector("#admin");
   try {
     course = await loadInitialData();
-    selectedLessonId = course.lessons[0]?.id;
+    course.lessons = course.lessons ?? [];
+    selectedLessonId = course.lessons[0]?.id ?? "";
     render();
   } catch (error) {
     root.innerHTML = `<main class="error-page"><h1>管理画面エラー</h1><p>${escapeHtml(error.message)}</p></main>`;

@@ -285,6 +285,22 @@ p {
   color: var(--muted);
 }
 
+.empty-state {
+  min-height: 360px;
+}
+
+.empty-state h2 {
+  max-width: 760px;
+  font-size: clamp(2rem, 4vw, 3.5rem);
+  line-height: 1.1;
+}
+
+.empty-state p {
+  max-width: 680px;
+  color: var(--muted);
+  line-height: 1.8;
+}
+
 .page-header,
 .admin-shell__header {
   padding: 34px clamp(20px, 5vw, 72px);
@@ -297,6 +313,11 @@ p {
   grid-template-columns: minmax(0, 1fr) 320px;
   gap: 24px;
   padding: 28px clamp(20px, 5vw, 72px) 72px;
+}
+
+.lesson-layout--single {
+  grid-template-columns: minmax(0, 980px);
+  justify-content: center;
 }
 
 .lesson-main,

@@ -1,13 +1,7 @@
 const statusLabels = {
   draft: "下書き",
-  "ready-for-video": "動画待ち",
   published: "公開中",
-};
-
-const statusOrder = {
-  published: 0,
-  "ready-for-video": 1,
-  draft: 2,
+  archived: "非公開",
 };
 
 async function loadCourse() {
@@ -36,7 +30,7 @@ function youtubeId(url = "") {
     const match = text.match(pattern);
     if (match) return match[1];
   }
-  return text.length <= 20 ? text : "";
+  return text.length <= 24 ? text : "";
 }
 
 function renderVideo(lesson) {
@@ -44,9 +38,8 @@ function renderVideo(lesson) {
   if (!id) {
     return `
       <div class="video-placeholder">
-        <span>Video pending</span>
+        <span>Coming soon</span>
         <strong>${escapeHtml(lesson.title)}</strong>
-        <p>動画ができたら管理画面でYouTube限定公開URLを登録します。</p>
       </div>
     `;
   }
@@ -63,21 +56,21 @@ function renderVideo(lesson) {
 }
 
 function renderList(items = []) {
+  if (!items.length) return "";
   return `<ul>${items.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>`;
 }
 
 function lessonCard(lesson) {
   return `
-    <article class="lesson-card" data-status="${escapeHtml(lesson.status)}">
+    <article class="lesson-card">
       <div class="lesson-card__meta">
-        <span>Lesson ${lesson.number}</span>
-        <span class="status status--${escapeHtml(lesson.status)}">${statusLabels[lesson.status] ?? lesson.status}</span>
+        <span>Lesson ${escapeHtml(lesson.number)}</span>
+        <span>${escapeHtml(lesson.duration || "")}</span>
       </div>
       <h3>${escapeHtml(lesson.title)}</h3>
       <p>${escapeHtml(lesson.summary)}</p>
       <div class="lesson-card__footer">
-        <span>${escapeHtml(lesson.duration)}</span>
-        <a href="#${encodeURIComponent(lesson.id)}">詳細を見る</a>
+        <a href="#${encodeURIComponent(lesson.id)}">レッスンを開く</a>
       </div>
     </article>
   `;
@@ -87,120 +80,114 @@ function renderLesson(course, lesson) {
   return `
     <header class="page-header">
       <a class="back-link" href="#">講座トップへ</a>
-      <span class="eyebrow">Lesson ${lesson.number}</span>
+      <span class="eyebrow">Lesson ${escapeHtml(lesson.number)}</span>
       <h1>${escapeHtml(lesson.title)}</h1>
       <p>${escapeHtml(lesson.summary)}</p>
     </header>
 
-    <main class="lesson-layout">
+    <main class="lesson-layout lesson-layout--single">
       <section class="lesson-main">
         ${renderVideo(lesson)}
 
-        <section class="content-section">
-          <h2>このレッスンでできるようになること</h2>
-          ${renderList(lesson.objectives)}
-        </section>
+        ${
+          lesson.objectives?.length
+            ? `<section class="content-section"><h2>このレッスンで学ぶこと</h2>${renderList(lesson.objectives)}</section>`
+            : ""
+        }
 
-        <section class="content-section">
-          <h2>進め方</h2>
-          ${renderList(lesson.steps)}
-        </section>
+        ${
+          lesson.steps?.length
+            ? `<section class="content-section"><h2>進め方</h2>${renderList(lesson.steps)}</section>`
+            : ""
+        }
 
-        <section class="content-section">
-          <h2>Codexへの依頼文</h2>
-          <pre><code>${escapeHtml(lesson.prompt)}</code></pre>
-        </section>
+        ${
+          lesson.prompt
+            ? `<section class="content-section"><h2>Codexへの依頼例</h2><pre><code>${escapeHtml(lesson.prompt)}</code></pre></section>`
+            : ""
+        }
 
-        <section class="content-section">
-          <h2>演習</h2>
-          <p>${escapeHtml(lesson.exercise)}</p>
-        </section>
+        ${
+          lesson.exercise
+            ? `<section class="content-section"><h2>演習</h2><p>${escapeHtml(lesson.exercise)}</p></section>`
+            : ""
+        }
       </section>
-
-      <aside class="side-panel">
-        <h2>動画制作メモ</h2>
-        <dl>
-          <dt>状態</dt>
-          <dd>${statusLabels[lesson.status] ?? escapeHtml(lesson.status)}</dd>
-          <dt>目安時間</dt>
-          <dd>${escapeHtml(lesson.duration)}</dd>
-          <dt>テロップ案</dt>
-          <dd>${escapeHtml(lesson.captionDraft)}</dd>
-        </dl>
-        <a class="button button--ghost" href="admin/">管理画面を開く</a>
-      </aside>
     </main>
   `;
 }
 
+function renderEmptyLessons(course) {
+  const contact = course.site.contactUrl
+    ? `<a class="button button--ghost" href="${escapeHtml(course.site.contactUrl)}">問い合わせる</a>`
+    : "";
+  const apply = course.site.applyUrl
+    ? `<a class="button" href="${escapeHtml(course.site.applyUrl)}">受講案内を受け取る</a>`
+    : "";
+
+  return `
+    <section class="band empty-state" id="lessons">
+      <span class="eyebrow">Preparing</span>
+      <h2>レッスンを準備中です</h2>
+      <p>公開されたレッスンは、ここに順番に表示されます。動画と教材の準備ができ次第、受講できるようになります。</p>
+      <div class="hero__actions">${apply}${contact}</div>
+    </section>
+  `;
+}
+
 function renderHome(course) {
-  const publishedCount = course.lessons.filter((lesson) => lesson.status === "published").length;
-  const sortedLessons = [...course.lessons].sort((a, b) => a.number - b.number);
+  const lessons = [...(course.lessons ?? [])]
+    .filter((lesson) => lesson.status === "published")
+    .sort((a, b) => Number(a.number) - Number(b.number));
+
+  const apply = course.site.applyUrl
+    ? `<a class="button" href="${escapeHtml(course.site.applyUrl)}">受講案内を受け取る</a>`
+    : `<a class="button" href="#lessons">レッスンを見る</a>`;
 
   return `
     <header class="hero">
       <nav class="top-nav">
         <strong>${escapeHtml(course.site.title)}</strong>
         <div>
+          <a href="#about">概要</a>
           <a href="#lessons">レッスン</a>
-          <a href="#workflow">公開フロー</a>
-          <a href="admin/">管理</a>
         </div>
       </nav>
       <div class="hero__content">
-        <span class="eyebrow">Codex App Course</span>
+        <span class="eyebrow">Codex Course</span>
         <h1>${escapeHtml(course.site.title)}</h1>
         <p>${escapeHtml(course.site.description)}</p>
-        <div class="hero__actions">
-          <a class="button" href="#lessons">レッスンを見る</a>
-          <a class="button button--ghost" href="admin/">動画を管理する</a>
-        </div>
+        <div class="hero__actions">${apply}</div>
       </div>
-      <div class="hero__stats" aria-label="講座状況">
-        <div><strong>${course.lessons.length}</strong><span>Lessons</span></div>
-        <div><strong>${publishedCount}</strong><span>Published</span></div>
-        <div><strong>Free</strong><span>Stack</span></div>
+      <div class="hero__stats" aria-label="講座情報">
+        <div><strong>${lessons.length}</strong><span>公開レッスン</span></div>
+        <div><strong>動画</strong><span>画面録画中心</span></div>
+        <div><strong>実践</strong><span>Codexアプリで学習</span></div>
       </div>
     </header>
 
     <main>
-      <section class="band">
+      <section class="band" id="about">
         <div class="section-heading">
-          <span class="eyebrow">Learning Path</span>
-          <h2>チャットAIから、作業を任せるAIへ</h2>
-          <p>動画が未完成でも教材本文は先に公開できます。動画URLを入れると、各レッスンに自動で埋め込みます。</p>
+          <span class="eyebrow">About</span>
+          <h2>${escapeHtml(course.site.tagline)}</h2>
+          <p>この講座では、AIに答えを聞くだけでなく、作業を依頼し、結果を確認し、必要に応じて追加修正を頼む流れを扱います。</p>
         </div>
         <div class="tool-row">
-          ${course.tools.map((tool) => `<span>${escapeHtml(tool)}</span>`).join("")}
+          ${(course.tools ?? []).map((tool) => `<span>${escapeHtml(tool)}</span>`).join("")}
         </div>
       </section>
 
-      <section class="band" id="lessons">
-        <div class="section-heading">
-          <span class="eyebrow">Lessons</span>
-          <h2>初期レッスン</h2>
-        </div>
-        <div class="lesson-grid">
-          ${sortedLessons.map(lessonCard).join("")}
-        </div>
-      </section>
-
-      <section class="band workflow" id="workflow">
-        <div class="section-heading">
-          <span class="eyebrow">Publish Workflow</span>
-          <h2>動画ができたらすぐ公開</h2>
-        </div>
-        <div class="workflow-grid">
-          <div><strong>1</strong><h3>録画</h3><p>OBSで画面録画し、YouTubeに限定公開でアップロードします。</p></div>
-          <div><strong>2</strong><h3>登録</h3><p>管理画面に動画URL、公開状態、補足テキストを入力します。</p></div>
-          <div><strong>3</strong><h3>公開</h3><p>JSONを書き出して data/course.json に反映し、Cloudflare Pagesへデプロイします。</p></div>
-        </div>
-      </section>
+      ${
+        lessons.length
+          ? `<section class="band" id="lessons"><div class="section-heading"><span class="eyebrow">Lessons</span><h2>公開中のレッスン</h2></div><div class="lesson-grid">${lessons.map(lessonCard).join("")}</div></section>`
+          : renderEmptyLessons(course)
+      }
     </main>
 
     <footer class="site-footer">
       <span>Updated ${escapeHtml(course.site.updatedAt)}</span>
-      <a href="admin/">Admin</a>
+      <span>${escapeHtml(course.site.title)}</span>
     </footer>
   `;
 }
@@ -210,7 +197,7 @@ async function render() {
   try {
     const course = await loadCourse();
     const lessonId = decodeURIComponent(location.hash.replace("#", ""));
-    const lesson = course.lessons.find((item) => item.id === lessonId);
+    const lesson = (course.lessons ?? []).find((item) => item.id === lessonId && item.status === "published");
     root.innerHTML = lesson ? renderLesson(course, lesson) : renderHome(course);
     document.title = lesson ? `${lesson.title} | ${course.site.title}` : course.site.title;
   } catch (error) {
