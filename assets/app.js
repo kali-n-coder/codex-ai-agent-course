@@ -1,3 +1,5 @@
+import { getFirebaseRuntime, loadPublicCourse } from "./firebase-client.js";
+
 const DRAFT_KEY = "codex-course-admin-draft-v3";
 
 async function loadCourse() {
@@ -5,6 +7,16 @@ async function loadCourse() {
   if (params.get("preview") === "draft") {
     const stored = localStorage.getItem(DRAFT_KEY);
     if (stored) return JSON.parse(stored);
+  }
+
+  const firebase = getFirebaseRuntime();
+  if (firebase) {
+    try {
+      const course = await loadPublicCourse(firebase.db);
+      if (course) return course;
+    } catch (error) {
+      console.warn("Firestore course load failed. Falling back to data/course.json.", error);
+    }
   }
 
   const response = await fetch("data/course.json", { cache: "no-store" });

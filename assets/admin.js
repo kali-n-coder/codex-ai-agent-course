@@ -1,3 +1,14 @@
+import {
+  getFirebaseRuntime,
+  loadDraftCourse,
+  loadPublicCourse,
+  publishCourse,
+  saveDraftCourse,
+  signInAdmin,
+  signOutAdmin,
+  waitForUser,
+} from "./firebase-client.js";
+
 const DATA_URL = "../data/course.json";
 const DRAFT_KEY = "codex-course-admin-draft-v3";
 
@@ -10,8 +21,17 @@ const statusLabels = {
 let course = null;
 let selectedLessonId = "";
 let message = "";
+let firebase = null;
+let currentUser = null;
 
 async function loadInitialData() {
+  if (firebase && currentUser) {
+    const draft = await loadDraftCourse(firebase.db);
+    if (draft) return draft;
+    const publicCourse = await loadPublicCourse(firebase.db);
+    if (publicCourse) return publicCourse;
+  }
+
   const stored = localStorage.getItem(DRAFT_KEY);
   if (stored) return JSON.parse(stored);
   const response = await fetch(DATA_URL, { cache: "no-store" });
@@ -19,9 +39,12 @@ async function loadInitialData() {
   return response.json();
 }
 
-function saveDraft() {
+async function saveDraft() {
   course.site.updatedAt = new Date().toISOString().slice(0, 10);
   localStorage.setItem(DRAFT_KEY, JSON.stringify(course, null, 2));
+  if (firebase && currentUser) {
+    await saveDraftCourse(firebase.db, course);
+  }
 }
 
 function setMessage(text) {
@@ -151,6 +174,31 @@ function renderLessonEditor(lesson) {
   `;
 }
 
+function renderLogin() {
+  document.querySelector("#admin").innerHTML = `
+    <main class="login-shell">
+      <section class="editor-section login-panel">
+        <span class="eyebrow">Admin Login</span>
+        <h1>講座管理</h1>
+        <p class="note">レッスンを編集するには、管理者のGoogleアカウントでログインしてください。</p>
+        <button id="signIn" class="button">Googleでログイン</button>
+      </section>
+    </main>
+  `;
+
+  document.querySelector("#signIn").addEventListener("click", async () => {
+    try {
+      await signInAdmin(firebase.auth);
+      location.reload();
+    } catch (error) {
+      document.querySelector(".login-panel").insertAdjacentHTML(
+        "beforeend",
+        `<p class="note">${escapeHtml(error.message)}</p>`,
+      );
+    }
+  });
+}
+
 function render() {
   const lesson = selectedLesson();
 
@@ -162,9 +210,11 @@ function render() {
         <p>サイト情報とレッスン内容を編集します。</p>
       </div>
       <div class="admin-actions">
+        <span class="admin-user">${escapeHtml(currentUser?.email ?? "")}</span>
         <button id="saveDraft" class="button">下書き保存</button>
-        <button id="exportJson" class="button button--ghost">公開用JSONを書き出す</button>
+        <button id="publishCourse" class="button">公開する</button>
         <a class="button button--ghost" href="../?preview=draft" target="_blank" rel="noreferrer">下書きをプレビュー</a>
+        <button id="signOut" class="button button--ghost">ログアウト</button>
       </div>
     </header>
 
@@ -181,7 +231,7 @@ function render() {
       <section class="admin-editor">
         <div class="editor-section admin-help">
           <h2>編集の流れ</h2>
-          <p>この画面で保存した内容は、このブラウザ内の下書きです。サイトへ載せる内容が決まったら、公開用JSONを書き出して、リポジトリのデータを更新します。</p>
+          <p>この画面で保存した内容はFirestoreの下書きに入ります。サイトへ載せる内容が決まったら、公開します。</p>
         </div>
 
         <div class="editor-section">
@@ -233,40 +283,25 @@ function updateLessonFromForm() {
   lesson.exercise = document.querySelector("#lessonExercise").value.trim();
 }
 
-function addLesson() {
+async function addLesson() {
   updateSiteFromForm();
   updateLessonFromForm();
   course.lessons = course.lessons ?? [];
   const lesson = emptyLesson();
   course.lessons.push(lesson);
   selectedLessonId = lesson.id;
-  saveDraft();
+  await saveDraft();
   setMessage("レッスンを追加しました。");
-  render();
-}
-
-function downloadJson() {
-  updateSiteFromForm();
-  updateLessonFromForm();
-  saveDraft();
-  const blob = new Blob([JSON.stringify(course, null, 2)], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = "course.json";
-  link.click();
-  URL.revokeObjectURL(url);
-  setMessage("course.jsonを書き出しました。公開するには scripts/Publish-CourseData.ps1 で data/course.json に反映して push します。");
   render();
 }
 
 function bindEvents() {
   document.querySelectorAll("[data-select]").forEach((button) => {
-    button.addEventListener("click", () => {
+    button.addEventListener("click", async () => {
       updateSiteFromForm();
       updateLessonFromForm();
       selectedLessonId = button.dataset.select;
-      saveDraft();
+      await saveDraft();
       render();
     });
   });
@@ -274,25 +309,36 @@ function bindEvents() {
   document.querySelector("#addLesson")?.addEventListener("click", addLesson);
   document.querySelector("#addFirstLesson")?.addEventListener("click", addLesson);
 
-  document.querySelector("#applyLesson")?.addEventListener("click", () => {
+  document.querySelector("#applyLesson")?.addEventListener("click", async () => {
     updateSiteFromForm();
     updateLessonFromForm();
-    saveDraft();
+    await saveDraft();
     setMessage("編集中のレッスンを下書きに保存しました。");
     render();
   });
 
-  document.querySelector("#saveDraft").addEventListener("click", () => {
+  document.querySelector("#saveDraft").addEventListener("click", async () => {
     updateSiteFromForm();
     updateLessonFromForm();
-    saveDraft();
+    await saveDraft();
     setMessage("下書きを保存しました。");
     render();
   });
 
-  document.querySelector("#exportJson").addEventListener("click", downloadJson);
+  document.querySelector("#publishCourse").addEventListener("click", async () => {
+    updateSiteFromForm();
+    updateLessonFromForm();
+    await saveDraft();
+    if (firebase && currentUser) {
+      await publishCourse(firebase.db, course);
+      setMessage("公開しました。表示状態が「表示する」のレッスンだけがサイトに出ます。");
+    } else {
+      setMessage("Firebaseに接続されていないため公開できません。");
+    }
+    render();
+  });
 
-  document.querySelector("#duplicateLesson")?.addEventListener("click", () => {
+  document.querySelector("#duplicateLesson")?.addEventListener("click", async () => {
     updateSiteFromForm();
     updateLessonFromForm();
     const source = selectedLesson();
@@ -305,15 +351,15 @@ function bindEvents() {
     copy.status = "draft";
     course.lessons.push(copy);
     selectedLessonId = copy.id;
-    saveDraft();
+    await saveDraft();
     setMessage("レッスンを複製しました。");
     render();
   });
 
-  document.querySelector("#deleteLesson")?.addEventListener("click", () => {
+  document.querySelector("#deleteLesson")?.addEventListener("click", async () => {
     course.lessons = (course.lessons ?? []).filter((lesson) => lesson.id !== selectedLessonId);
     selectedLessonId = course.lessons[0]?.id ?? "";
-    saveDraft();
+    await saveDraft();
     setMessage("レッスンを削除しました。");
     render();
   });
@@ -322,11 +368,24 @@ function bindEvents() {
     localStorage.removeItem(DRAFT_KEY);
     location.reload();
   });
+
+  document.querySelector("#signOut").addEventListener("click", async () => {
+    await signOutAdmin(firebase.auth);
+    location.reload();
+  });
 }
 
 async function init() {
   const root = document.querySelector("#admin");
   try {
+    firebase = getFirebaseRuntime();
+    if (firebase) {
+      currentUser = await waitForUser(firebase.auth);
+      if (!currentUser) {
+        renderLogin();
+        return;
+      }
+    }
     course = await loadInitialData();
     course.lessons = course.lessons ?? [];
     selectedLessonId = course.lessons[0]?.id ?? "";
